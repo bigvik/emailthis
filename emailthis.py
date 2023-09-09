@@ -25,10 +25,11 @@ path, filename = os.path.split(absFilePath)
 conn = sqlite3.connect(path+"\emailthis.db")
 cursor = conn.cursor()
 cursor.execute("""CREATE TABLE IF NOT EXISTS mailto(name text, addr text)""")
+cursor.execute("""CREATE TABLE IF NOT EXISTS config(fromx text, server text, port integer, pass text, subject text, body text)""")
 conn.commit()
 
 def send_email(addr_to, msg_subj, msg_text, files):
-    name_from = cnf.efrom
+    name_from = app.conf[0]
 
     msg = MIMEMultipart()
     msg['From'] = name_from
@@ -40,10 +41,10 @@ def send_email(addr_to, msg_subj, msg_text, files):
 
     process_attachement(msg, files)
 
-    addr_from = cnf.efrom
-    password = cnf.epass
+    addr_from = app.conf[0]
+    password = app.conf[3]
 
-    server = smtplib.SMTP_SSL(cnf.eserver, cnf.eport)
+    server = smtplib.SMTP_SSL(app.conf[1], app.conf[2])
     #server.starttls()
     #server.set_debuglevel(True)
     server.login(addr_from, password)
@@ -108,18 +109,102 @@ class settingsDialog(tk.Toplevel):
     def __init__(self, parent):
         super().__init__(parent)
 
+        self.title("Config")
+
+        self.fromx = tk.StringVar()
+        self.server = tk.StringVar()
+        self.port = tk.StringVar()
+        self.passx = tk.StringVar()
+        self.subject = tk.StringVar()
+        self.body = tk.StringVar()
+
+        self.cconf = cursor.execute('SELECT * FROM config')
+        self.conf = self.cconf.fetchone()
+        if self.conf == None:
+            self.conf = ('', '', 0, '', '', '')
+
+        sframe = Frame(self)
+        sframe.pack(fill=BOTH, expand=True)
+
+        # From #################################################################################
+        sframe1 = Frame(sframe)
+        sframe1.pack(fill=X)
+        label_from = tk.Label(sframe1, text='From:', width=10)
+        label_from.pack(side=LEFT, padx=5, pady=5)
+        entry_from = tk.Entry(sframe1, textvariable=self.fromx)
+        entry_from.insert(0, self.conf[0])
+        entry_from.pack(fill=X, padx=5, expand=True)
+        # Server ###############################################################################
+        sframe2 = Frame(sframe)
+        sframe2.pack(fill=X)
+        label_server = tk.Label(sframe2, text='Server:', width=10)
+        label_server.pack(side=LEFT, padx=5, pady=5)
+        entry_server = tk.Entry(sframe2, textvariable=self.server)
+        entry_server.insert(0, self.conf[1])
+        entry_server.pack(fill=X, padx=5, expand=True)
+        # Port #################################################################################
+        sframe3 = Frame(sframe)
+        sframe3.pack(fill=X)
+        label_port = tk.Label(sframe3, text='Port:', width=10)
+        label_port.pack(side=LEFT, padx=5, pady=5)
+        entry_port = tk.Entry(sframe3, textvariable=self.port)
+        entry_port.insert(0, self.conf[2])
+        entry_port.pack(fill=X, padx=5, expand=True)
+        # Pass #################################################################################
+        sframe4 = Frame(sframe)
+        sframe4.pack(fill=X)
+        label_pass = tk.Label(sframe4, text='Pass:', width=10)
+        label_pass.pack(side=LEFT, padx=5, pady=5)
+        entry_pass = tk.Entry(sframe4, textvariable=self.passx)
+        entry_pass.insert(0, self.conf[3])
+        entry_pass.pack(fill=X, padx=5, expand=True) 
+        # Subject ##############################################################################
+        sframe5 = Frame(sframe)
+        sframe5.pack(fill=X)
+        label_subj = tk.Label(sframe5, text='Subject:', width=10)
+        label_subj.pack(side=LEFT, padx=5, pady=5)
+        entry_subj = tk.Entry(sframe5, textvariable=self.subject)
+        entry_subj.insert(0, self.conf[4])
+        entry_subj.pack(fill=X, padx=5, expand=True)
+        # Default text #########################################################################
+        sframe6 = Frame(sframe)
+        sframe6.pack(fill=X)
+        label_text = tk.Label(sframe6, text='Text:', width=10)
+        label_text.pack(side=LEFT, padx=5, pady=5)
+        entry_text = tk.Entry(sframe6, textvariable=self.body)
+        entry_text.insert(0, self.conf[5])
+        entry_text.pack(fill=X, padx=5, expand=True)
+        # Button save ##########################################################################
+        sframe7 = Frame(sframe, height = 5)
+        sframe7.pack(fill=X)
+        sbutton = tk.Button(sframe7, text="Закрыть!", command = self.quit)
+        sbutton.pack(side=LEFT)
+        sbuttonq = tk.Button(sframe7, text="Сохранить", command = self.write_conf)
+        sbuttonq.pack(side=RIGHT)
+
+    def write_conf(self):
+        sql_add = "INSERT or REPLACE INTO config (fromx, server, port, pass, subject, body) VALUES (?, ?, ?, ?, ?, ?)"
+        cursor.execute(sql_add, (self.fromx.get(), self.server.get(), int(self.port.get()), self.passx.get(), self.subject.get(), self.body.get()))
+        conn.commit()
+        self.destroy()
+
+    def quit(self):
+        self.master.destroy()
+
 class addDialog(tk.Toplevel):
     def __init__(self, parent):
         super().__init__(parent)
 
+        self.title("Add recipient")
+
         self.username = tk.StringVar()
         self.usermail = tk.StringVar()
 
-        label_name_m = tk.Label(self,text = 'Имя')
+        label_name_m = tk.Label(self,text = 'Имя', width=10)
         label_name_m.pack()
         entry_name_m = tk.Entry(self, textvariable=self.username)
         entry_name_m.pack()
-        label_addr_m = tk.Label(self,text = 'Адрес')
+        label_addr_m = tk.Label(self,text = 'Адрес', width=10)
         label_addr_m.pack()
         entry_addr_m = tk.Entry(self, textvariable=self.usermail)
         entry_addr_m.pack()
@@ -137,8 +222,14 @@ class addDialog(tk.Toplevel):
 class App(tk.Tk):
     def __init__(self):
         super().__init__()
+        
+        self.title("EmailThis")
 
         #self.geometry("640x480+300+300")
+
+        self.conf = None
+        self.check_conf()
+
 
         self.frame = Frame()
         self.frame.pack(fill=BOTH, expand=True)
@@ -175,7 +266,7 @@ class App(tk.Tk):
         self.label_subj = tk.Label(self.frame2, text='Тема:', width=10)
         self.label_subj.pack(side=LEFT, padx=5, pady=5)
         self.entry_subj = tk.Entry(self.frame2)
-        self.entry_subj.insert(0, cnf.subj)
+        self.entry_subj.insert(0, self.conf[4])
         self.entry_subj.pack(fill=X, padx=5, expand=True)     
 
         ##########################################################################################
@@ -185,7 +276,7 @@ class App(tk.Tk):
         self.label_msg.pack(side=LEFT, anchor=N, padx=5, pady=5)
         self.text_msg = tk.Text(self.frame3, height = 10, width=25)
         self.text_msg.pack(side=LEFT,fill=X, anchor=N, pady=5, padx=5, expand=True)
-        self.text_msg.insert(1.0, cnf.text)
+        self.text_msg.insert(1.0, self.conf[5])
 
         ###########################################################################################
         self.frame4 = Frame(self.frame)
@@ -214,22 +305,34 @@ class App(tk.Tk):
         )
         self.button.pack( padx=5, pady=5)
 
+
     def fill_combo(self):
         self.cnames = cursor.execute("SELECT name FROM mailto")
         self.names = self.cnames.fetchall()
-        self.combo_to['values'] = self.names
-        self.combo_to.current(0)
+        if self.names == []:        
+            self.open_add()
+            self.fill_combo()
+        else:
+            self.combo_to['values'] = self.names
+            self.combo_to.current(0)
+            
+    def check_conf(self):
+        self.cconf = cursor.execute('SELECT * FROM config')
+        self.conf = self.cconf.fetchone()
+        if self.conf == None:
+            self.open_settings()
+            self.check_conf()
 
     def open_add(self):
         add_dialog = addDialog(self)
-        add_dialog.transient(app)
+        add_dialog.transient(self)
         add_dialog.grab_set()
         add_dialog.focus_set()
         add_dialog.wait_window()
 
     def open_settings(self):
         set_dialog = settingsDialog(self)
-        set_dialog.transient(app)
+        set_dialog.transient(self)
         set_dialog.grab_set()
         set_dialog.focus_set()
         set_dialog.wait_window()
@@ -240,11 +343,11 @@ class App(tk.Tk):
             cursor.execute(sql, (get_addr(self.combo_to.get()),))
             conn.commit()
 
-
     def send_click(self):
         send_email(get_addr(self.combo_to.get()), self.entry_subj.get(), self.text_msg.get("1.0", tk.END), args.list)
         msg = "Ваше письмо успешно отправлено"
         mb.showinfo("Информация", msg)
+        self.destroy()
 
 
 if __name__ == "__main__":
