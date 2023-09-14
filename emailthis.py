@@ -5,6 +5,8 @@ import sqlite3
 import smtplib
 import os
 import mimetypes
+from email.header import Header
+from email.utils import formataddr
 from email import encoders
 from email.mime.base import MIMEBase
 from email.mime.text import MIMEText
@@ -17,7 +19,7 @@ import tkinter.messagebox as mb
 from tkinter import Tk, Toplevel, Text, BOTH, X, N, LEFT, RIGHT
 from tkinter.ttk import Frame, Label, Entry, Combobox
 
-import emtsconf as cnf
+#import emtsconf as cnf
 
 absFilePath = os.path.abspath(__file__)
 path, filename = os.path.split(absFilePath)
@@ -25,14 +27,15 @@ path, filename = os.path.split(absFilePath)
 conn = sqlite3.connect(path+"\emailthis.db")
 cursor = conn.cursor()
 cursor.execute("""CREATE TABLE IF NOT EXISTS mailto(name text, addr text)""")
-cursor.execute("""CREATE TABLE IF NOT EXISTS config(fromx text, server text, port integer, pass text, subject text, body text)""")
+cursor.execute("""CREATE TABLE IF NOT EXISTS config(from_name text, from_addr text, server text, port integer, pass text, subject text, body text)""")
 conn.commit()
 
 def send_email(addr_to, msg_subj, msg_text, files):
-    name_from = app.conf[0]
-
+    #name_from = app.conf[0]
+    author = formataddr((str(Header(app.conf[0])), app.conf[1]))#u'Игорь', 'utf-8'
     msg = MIMEMultipart()
-    msg['From'] = name_from
+    
+    msg['From'] = author
     msg['To'] = addr_to
     msg['Subject'] = msg_subj
 
@@ -41,10 +44,10 @@ def send_email(addr_to, msg_subj, msg_text, files):
 
     process_attachement(msg, files)
 
-    addr_from = app.conf[0]
-    password = app.conf[3]
+    addr_from = app.conf[1]
+    password = app.conf[4]
 
-    server = smtplib.SMTP_SSL(app.conf[1], app.conf[2])
+    server = smtplib.SMTP_SSL(app.conf[2], app.conf[3])
     #server.starttls()
     #server.set_debuglevel(True)
     server.login(addr_from, password)
@@ -111,7 +114,8 @@ class settingsDialog(tk.Toplevel):
 
         self.title("Config")
 
-        self.fromx = tk.StringVar()
+        self.from_name = tk.StringVar()
+        self.from_addr = tk.StringVar()
         self.server = tk.StringVar()
         self.port = tk.StringVar()
         self.passx = tk.StringVar()
@@ -121,7 +125,7 @@ class settingsDialog(tk.Toplevel):
         self.cconf = cursor.execute('SELECT * FROM config')
         self.conf = self.cconf.fetchone()
         if self.conf == None:
-            self.conf = ('', '', 0, '', '', '')
+            self.conf = ('', '', '', 0, '', '', '')
 
         sframe = Frame(self)
         sframe.pack(fill=BOTH, expand=True)
@@ -129,10 +133,15 @@ class settingsDialog(tk.Toplevel):
         # From #################################################################################
         sframe1 = Frame(sframe)
         sframe1.pack(fill=X)
-        label_from = tk.Label(sframe1, text='From:', width=10)
+        label_from_name = tk.Label(sframe1, text='Name From:', width=10)
+        label_from_name.pack(side=LEFT, padx=5, pady=5)
+        entry_from_name = tk.Entry(sframe1, textvariable=self.from_name)
+        entry_from_name.insert(0, self.conf[0])
+        entry_from_name.pack(fill=X, padx=5, expand=True)
+        label_from = tk.Label(sframe1, text='Address From:', width=10)
         label_from.pack(side=LEFT, padx=5, pady=5)
-        entry_from = tk.Entry(sframe1, textvariable=self.fromx)
-        entry_from.insert(0, self.conf[0])
+        entry_from = tk.Entry(sframe1, textvariable=self.from_addr)
+        entry_from.insert(0, self.conf[1])
         entry_from.pack(fill=X, padx=5, expand=True)
         # Server ###############################################################################
         sframe2 = Frame(sframe)
@@ -140,7 +149,7 @@ class settingsDialog(tk.Toplevel):
         label_server = tk.Label(sframe2, text='Server:', width=10)
         label_server.pack(side=LEFT, padx=5, pady=5)
         entry_server = tk.Entry(sframe2, textvariable=self.server)
-        entry_server.insert(0, self.conf[1])
+        entry_server.insert(0, self.conf[2])
         entry_server.pack(fill=X, padx=5, expand=True)
         # Port #################################################################################
         sframe3 = Frame(sframe)
@@ -148,7 +157,7 @@ class settingsDialog(tk.Toplevel):
         label_port = tk.Label(sframe3, text='Port:', width=10)
         label_port.pack(side=LEFT, padx=5, pady=5)
         entry_port = tk.Entry(sframe3, textvariable=self.port)
-        entry_port.insert(0, self.conf[2])
+        entry_port.insert(0, self.conf[3])
         entry_port.pack(fill=X, padx=5, expand=True)
         # Pass #################################################################################
         sframe4 = Frame(sframe)
@@ -156,7 +165,7 @@ class settingsDialog(tk.Toplevel):
         label_pass = tk.Label(sframe4, text='Pass:', width=10)
         label_pass.pack(side=LEFT, padx=5, pady=5)
         entry_pass = tk.Entry(sframe4, textvariable=self.passx)
-        entry_pass.insert(0, self.conf[3])
+        entry_pass.insert(0, self.conf[4])
         entry_pass.pack(fill=X, padx=5, expand=True) 
         # Subject ##############################################################################
         sframe5 = Frame(sframe)
@@ -164,7 +173,7 @@ class settingsDialog(tk.Toplevel):
         label_subj = tk.Label(sframe5, text='Subject:', width=10)
         label_subj.pack(side=LEFT, padx=5, pady=5)
         entry_subj = tk.Entry(sframe5, textvariable=self.subject)
-        entry_subj.insert(0, self.conf[4])
+        entry_subj.insert(0, self.conf[5])
         entry_subj.pack(fill=X, padx=5, expand=True)
         # Default text #########################################################################
         sframe6 = Frame(sframe)
@@ -172,7 +181,7 @@ class settingsDialog(tk.Toplevel):
         label_text = tk.Label(sframe6, text='Text:', width=10)
         label_text.pack(side=LEFT, padx=5, pady=5)
         entry_text = tk.Entry(sframe6, textvariable=self.body)
-        entry_text.insert(0, self.conf[5])
+        entry_text.insert(0, self.conf[6])
         entry_text.pack(fill=X, padx=5, expand=True)
         # Button save ##########################################################################
         sframe7 = Frame(sframe, height = 5)
@@ -183,8 +192,8 @@ class settingsDialog(tk.Toplevel):
         sbuttonq.pack(side=RIGHT)
 
     def write_conf(self):
-        sql_add = "INSERT or REPLACE INTO config (fromx, server, port, pass, subject, body) VALUES (?, ?, ?, ?, ?, ?)"
-        cursor.execute(sql_add, (self.fromx.get(), self.server.get(), int(self.port.get()), self.passx.get(), self.subject.get(), self.body.get()))
+        sql_add = "INSERT or REPLACE INTO config (from_name, from_addr, server, port, pass, subject, body) VALUES (?, ?, ?, ?, ?, ?, ?)"
+        cursor.execute(sql_add, (self.from_name.get(), self.from_addr.get(), self.server.get(), int(self.port.get()), self.passx.get(), self.subject.get(), self.body.get()))
         conn.commit()
         self.destroy()
 
@@ -225,7 +234,7 @@ class App(tk.Tk):
         
         self.title("EmailThis")
 
-        #self.geometry("640x480+300+300")
+        self.geometry("640x480+300+300")
 
         self.conf = None
         self.check_conf()
@@ -266,7 +275,7 @@ class App(tk.Tk):
         self.label_subj = tk.Label(self.frame2, text='Тема:', width=10)
         self.label_subj.pack(side=LEFT, padx=5, pady=5)
         self.entry_subj = tk.Entry(self.frame2)
-        self.entry_subj.insert(0, self.conf[4])
+        self.entry_subj.insert(0, self.conf[5])
         self.entry_subj.pack(fill=X, padx=5, expand=True)     
 
         ##########################################################################################
@@ -276,7 +285,7 @@ class App(tk.Tk):
         self.label_msg.pack(side=LEFT, anchor=N, padx=5, pady=5)
         self.text_msg = tk.Text(self.frame3, height = 10, width=25)
         self.text_msg.pack(side=LEFT,fill=X, anchor=N, pady=5, padx=5, expand=True)
-        self.text_msg.insert(1.0, self.conf[5])
+        self.text_msg.insert(1.0, self.conf[6])
 
         ###########################################################################################
         self.frame4 = Frame(self.frame)
@@ -352,7 +361,7 @@ class App(tk.Tk):
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(
-        prog='eMail',
+        prog='eMailThis',
         description='Программа отсылающая файлы по почте',
         epilog='(c) bigvik'
     )
